@@ -6,9 +6,26 @@ const fs = require('fs');
 const express = require('express');
 const { Pool } = require('pg');
 const { expressjwt: jwt } = require("express-jwt");
-
+const bent = require('bent');
 
 var port = process.env.SERVER_PORT || 80;
+
+
+
+const catalogLinkOptions = {
+    hostname: (process.env.CATALOG_SERVER || 'localhost'),
+    port: (process.env.CATALOG_PORT || '80'),
+    path: (process.env.CATALOG_PREFIX || '/catalog'),
+};
+
+const catalogLink = "http://"+catalogLinkOptions.hostname+":"+catalogLinkOptions.port+catalogLinkOptions.path
+console.log("Linking to catalog via "+catalogLink)
+
+const catalogGetItem = bent(catalogLink+'/list/','json')
+
+
+
+
 
 
 
@@ -65,17 +82,28 @@ function startServer() {
         )
     })
     app.post(routePrefix+'/basket/add',  async (req, res) => {
-        let params = [req.auth.login,""+req.body.catalogId,req.body.quantity]
-        
-        postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity") VALUES ($1,$2,$3)`,params).then(
-            (queryResult)=> {
-                res.send({"status":"success"})
+        let catalogId = ""+req.body.catalogId
+       
+        catalogGetItem(catalogId).then(
+            (RESTResult) => {
+                let params = [req.auth.login,catalogId,req.body.quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
+                postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
+                    (queryResult)=> {
+                        res.send({"status":"success"})
+                    },
+                    (err) => {
+                        console.log(err)
+                        res.status(403).send("internal error")
+                    }
+                )
             },
             (err) => {
-                console.log(err)
-                res.status(403).send("internal error")
+                console.log("catalog query error "+err)
+                res.status(403).send("invalid catalog id "+catalogId)
             }
         )
+
+        
 
         
     })
@@ -130,7 +158,8 @@ async function run() {
         "id" serial,
         "userId" text,
         "catalogId" text,
-        "quantity" numeric(9,2),
+        "quantity" numeric(9,0),
+        "price" numeric(12,2),
         "name" text,
         "imgurl" text,
         PRIMARY KEY( id )
@@ -139,6 +168,7 @@ async function run() {
         "id" serial,
         "userId" text,
         "name" text,
+        "totalPrice" numeric(14,2),
         PRIMARY KEY( id )
     );
     CREATE TABLE IF NOT EXISTS "orderItem" (
@@ -146,9 +176,10 @@ async function run() {
         "userId" text,
         "orderId" text,
         "catalogId" text,
-        "quantity" numeric(9,2),
+        "quantity" numeric(9,0),
         "name" text,
         "imgurl" text,
+        "price" numeric(12,2),
         PRIMARY KEY( id )
     );   
     `).then(

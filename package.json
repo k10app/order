@@ -9,6 +9,7 @@
   "author": "K10mmunity",
   "license": "MIT",
   "dependencies": {
+    "bent": "^7.3.12",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-jwt": "^7.7.7",
