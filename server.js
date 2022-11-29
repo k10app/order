@@ -43,6 +43,12 @@ const postgresClient = new Pool({
 })
 
 
+function timeStamp() {
+    var d = new Date()
+    lz = (res) => { return res<10?"0"+res:""+res}//leadingzero 01 .. 09 10
+    return d.toDateString()+" "+lz(d.getHours())+":"+lz(d.getMinutes())
+}
+
 function startServer() {
     var app = express();
 
@@ -86,7 +92,10 @@ function startServer() {
        
         catalogGetItem(catalogId).then(
             (RESTResult) => {
+                
+
                 let params = [req.auth.login,catalogId,req.body.quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
+                console.log(params)
                 postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
                     (queryResult)=> {
                         res.send({"status":"success"})
@@ -102,46 +111,114 @@ function startServer() {
                 res.status(403).send("invalid catalog id "+catalogId)
             }
         )
+    })
 
+    app.get(routePrefix+'/basket/delete/:select(all|[0-9]+)',  async (req, res) => {
+        var selectValue = req.params.select
         
-
+        var queryResult 
+        switch(selectValue) {
+            case "all": 
+                queryResult =postgresClient.query(`DELETE FROM basket WHERE "userId" = $1`,[req.auth.login])
+                break;
+            default: 
+                queryResult =postgresClient.query(`DELETE FROM basket WHERE "userId" = $1 AND id = $2`,[req.auth.login,selectValue])
+        }
+        queryResult.then(
+            (dbResult) => {
+                res.send({"status":"ok"})
+            },
+            (err) => {
+                console.log("delete error "+err)
+                res.status(403).send("internal error")
+            } 
+        )
         
     })
+
     app.post(routePrefix+'/main/create',  async (req, res) => {
-        res.send({
-            "status":"success",
-            "id":3,
-            "name":(new Date())
-        })
+        let orderName = timeStamp()
+        let params = [req.auth.login,orderName,req.body.name,req.body.street,req.body.pobox,req.body.city,req.body.postcode,req.body.country]
+
+        postgresClient.query(`INSERT INTO "order" ("userId","orderName","userName","street","PObox","city","postcode","country") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,"orderName";`,params).then(
+                (orderResult)=> {
+                    var orderId = orderResult.rows[0].id;
+
+                    postgresClient.query(`INSERT INTO "orderItem" ("orderId","userId","catalogId","quantity","name","imgurl","price")
+                     (SELECT $2,"userId","catalogId","quantity","name","imgurl","price" FROM basket WHERE "userId" = $1);`,[req.auth.login,orderId]).then(
+                        (copyResult) => {
+                            res.send({
+                                "status":"success",
+                                "id":orderId,
+                                "name":orderResult.rows[0].orderName
+                            })
+                        },
+                        (err)=> {
+                            console.log(err)
+                            res.status(403).send("internal error")
+                        }
+                     )
+                },
+                (err)=> {
+                    console.log(err)
+                    res.status(403).send("internal error")
+                }
+             )
     })
 
     app.get(routePrefix+'/main/list', async (req, res) => {
-        res.send([
-            {
-                "id":1,
-                "name":((new Date("2022-11-11T20:00:00Z")))  
+        postgresClient.query(`SELECT "id","orderName" AS name FROM "order" WHERE "userId" = $1`,[req.auth.login]).then(
+            (queryResult)=> {
+                if(queryResult.rowCount == 0) {
+                    res.send([])
+                } else {
+                    res.send(queryResult.rows)
+                }
+                
             },
-            {
-                "id":2,
-                "name":((new Date("2022-11-12T20:00:00Z")))  
+            (err) => {
+                console.log(err)
+                res.status(403).send("internal error")
             }
-        ])
+        )
+
+
+
     })
-    //only works up to 9 but who cares
+ 
     app.get(routePrefix+'/main/list/:orderId([0-9]+)', async (req, res) => {
-        res.send({
-            "id":req.params.orderId,
-            "name":((new Date("2022-11-1"+req.params.orderId+"T20:00:00Z"))),
-            "items":[
-                {
-                        "id":1,
-                        "catalogId":1,   
-                        "quantity":1,
-                        "name":"name",
-                        "imgurl":"https://",
-                }       
-            ]
-        })
+        let orderId = req.params.orderId
+        let userId = req.auth.login
+
+        postgresClient.query(`SELECT "id","orderName" FROM "order" WHERE "userId" = $1 AND "id" = $2`,[userId,orderId]).then(
+            (queryResult) => {
+                if(queryResult.rowCount == 0) {
+                    res.send({})
+                } else {
+                    postgresClient.query(`SELECT * FROM "orderItem" WHERE "userId" = $1 AND "orderId" = $2`,[userId,orderId]).then(
+                        (itemQueryResult)=> {
+                            var orderObject = function(id,name,items) {
+                                return {id:orderId,name:name,items:items}
+                            }
+                            if(queryResult.rowCount == 0) {
+                                res.send(orderObject(queryResult.rows[0].id,queryResult.rows[0].orderName,[]))
+                            } else {
+                                res.send(orderObject(queryResult.rows[0].id,queryResult.rows[0].orderName,itemQueryResult.rows))
+                            }
+                        },
+                        (err) => {
+                            console.log(err)
+                            res.status(403).send("internal error")
+                        }
+                    )
+                }
+            },
+            (err) => {
+                console.log(err)
+                res.status(403).send("internal error")
+            }
+        )
+        
     })
     
     app.listen(port, () => {
@@ -167,7 +244,13 @@ async function run() {
     CREATE TABLE IF NOT EXISTS "order" (
         "id" serial,
         "userId" text,
-        "name" text,
+        "orderName" text,
+        "userName" text,
+        "street" text,
+        "PObox" text,
+        "city" text,
+        "postcode" text,
+        "country" text,
         "totalPrice" numeric(14,2),
         PRIMARY KEY( id )
     );
