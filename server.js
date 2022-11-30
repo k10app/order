@@ -22,6 +22,7 @@ const catalogLink = "http://"+catalogLinkOptions.hostname+":"+catalogLinkOptions
 console.log("Linking to catalog via "+catalogLink)
 
 const catalogGetItem = bent(catalogLink+'/list/','json')
+const catalogUpdateStock = bent(catalogLink+'/bulkStockUpdate','POST','json')
 
 
 
@@ -138,7 +139,9 @@ function startServer() {
 
     app.post(routePrefix+'/main/create',  async (req, res) => {
         let orderName = timeStamp()
-        let params = [req.auth.login,orderName,req.body.name,req.body.street,req.body.pobox,req.body.city,req.body.postcode,req.body.country]
+        //for future addr
+        //let params = [req.auth.login,orderName,req.body.name,req.body.street,req.body.pobox,req.body.city,req.body.postcode,req.body.country]
+        let params = [req.auth.login,orderName,"","","","","",""]
 
         postgresClient.query(`INSERT INTO "order" ("userId","orderName","userName","street","PObox","city","postcode","country") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,"orderName";`,params).then(
                 (orderResult)=> {
@@ -221,6 +224,40 @@ function startServer() {
         
     })
     
+
+    app.get(routePrefix+'/main/delete/:select(all|[0-9]+)',  async (req, res) => {
+        var selectValue = req.params.select
+        
+        try {
+            await postgresClient.query('BEGIN')
+            
+            switch(selectValue) {
+                case "all": 
+                    await postgresClient.query(`DELETE FROM "orderItem" WHERE "userId" = $1`,[req.auth.login])
+                    await postgresClient.query(`DELETE FROM "order" WHERE "userId" = $1`,[req.auth.login])
+                    break;
+                default: 
+                    await postgresClient.query(`DELETE FROM "orderItem" WHERE "userId" = $1 AND "orderId" = $2`,[req.auth.login,selectValue])
+                    await postgresClient.query(`DELETE FROM "order" WHERE "userId" = $1 AND id = $2`,[req.auth.login,selectValue])
+            }
+            postgresClient.query('COMMIT').then(
+                (dbResult) => {
+                    res.send({"status":"ok"})
+                },
+                (err) => {
+                    console.log("delete error "+err)
+                    res.status(403).send("internal error")
+                } 
+            )
+        } catch (err) {
+            await client.query('ROLLBACK')
+            res.status(500).send("internal error on delete")
+            console.log("Could not process delete order transaction ",err)
+        }
+        
+    })
+
+
     app.listen(port, () => {
      console.log("Server running on port "+port);
     });   
