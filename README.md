@@ -6,7 +6,7 @@ Fake server at this point
 Replace $certpath with path to public.pub
 
 ```
-docker run -p 80:80 -v $certpath:/order/certificates --rm -it --name order ghcr.io/k10app/order
+docker run -e POSTGRES_HOST=$postgresserver -e CATALOG_SERVER=$catalogserver -e CATALOG_PORT=3001 -p 3002:80 -v $certpath:/order/certificates --rm -it --name order ghcr.io/k10app/order
 ```
 
 # building
