@@ -7,6 +7,7 @@ const express = require('express');
 const { Pool } = require('pg');
 const { expressjwt: jwt } = require("express-jwt");
 const bent = require('bent');
+const cors = require("cors");
 
 var port = process.env.SERVER_PORT || 80;
 
@@ -50,10 +51,14 @@ function timeStamp() {
     return d.toDateString()+" "+lz(d.getHours())+":"+lz(d.getMinutes())
 }
 
+function audit(req) {
+    console.log("Request",req.auth.login,req.originalUrl)
+}
 function startServer() {
     var app = express();
 
     app.use(express.json());
+    app.use(cors());
 
     //jwt validation
     app.use(
@@ -72,6 +77,8 @@ function startServer() {
         res.status(404).send("unrecognized route")
     });
     app.get(routePrefix+'/basket/list',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
         //,
         postgresClient.query(`SELECT * FROM basket WHERE "userId" = $1`,[req.auth.login]).then(
@@ -91,6 +98,8 @@ function startServer() {
         postgresClient.release()  
     })
     app.post(routePrefix+'/basket/add',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
         let catalogId = ""+req.body.catalogId
        
@@ -120,6 +129,8 @@ function startServer() {
 
 
     app.get(routePrefix+'/basket/delete/:select(all|[0-9]+)',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
         var selectValue = req.params.select
         
@@ -144,6 +155,8 @@ function startServer() {
     })
 
     app.post(routePrefix+'/main/create',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
 
         let orderName = timeStamp()
@@ -203,6 +216,8 @@ function startServer() {
     })
 
     app.post(routePrefix+'/main/pay/:orderId([0-9]+)',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
 
         let orderId = req.params.orderId
@@ -248,6 +263,8 @@ function startServer() {
     })
 
     app.get(routePrefix+'/main/list', async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
 
         postgresClient.query(`SELECT "id","orderName","status","totalPrice" AS name FROM "order" WHERE "userId" = $1`,[req.auth.login]).then(
@@ -270,6 +287,8 @@ function startServer() {
     })
  
     app.get(routePrefix+'/main/list/:orderId([0-9]+)', async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
 
         let orderId = req.params.orderId
@@ -316,6 +335,8 @@ function startServer() {
     
 
     app.get(routePrefix+'/main/delete/:select(all|[0-9]+)',  async (req, res) => {
+        audit(req)
+
         postgresClient = await postgresPool.connect()
 
         var selectValue = req.params.select
