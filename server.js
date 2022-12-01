@@ -128,7 +128,7 @@ function startServer() {
     })
 
 
-    app.get(routePrefix+'/basket/delete/:select(all|[0-9]+)',  async (req, res) => {
+    app.delete(routePrefix+'/basket/delete/:select(all|[0-9]+)',  async (req, res) => {
         audit(req)
 
         postgresClient = await postgresPool.connect()
@@ -334,7 +334,7 @@ function startServer() {
     })
     
 
-    app.get(routePrefix+'/main/delete/:select(all|[0-9]+)',  async (req, res) => {
+    app.delete(routePrefix+'/main/delete/:select(all|[0-9]+)',  async (req, res) => {
         audit(req)
 
         postgresClient = await postgresPool.connect()
