@@ -74,8 +74,14 @@ function startServer() {
     });
 
     app.get("/", async (req, res) => {
+        console.log("404 on ",req.originalUrl)
         res.status(404).send("unrecognized route")
     });
+    app.post("/", async (req, res) => {
+        console.log("404 on ",req.originalUrl,req.body)
+        res.status(404).send("unrecognized route")
+    });
+
     app.get(routePrefix+'/basket/list',  async (req, res) => {
         audit(req)
 
@@ -245,7 +251,7 @@ function startServer() {
                         },
                         (err) => {
                             res.status(500).send("internal error paying")
-                            console.log("Could not get order items ",err)
+                            console.log("Issues updating catalog ",err)
                         }
                     )
                 },
@@ -267,7 +273,7 @@ function startServer() {
 
         postgresClient = await postgresPool.connect()
 
-        postgresClient.query(`SELECT "id","orderName","status","totalPrice" AS name FROM "order" WHERE "userId" = $1`,[req.auth.login]).then(
+        postgresClient.query(`SELECT "id","orderName" AS name,"status","totalPrice"  FROM "order" WHERE "userId" = $1`,[req.auth.login]).then(
             (queryResult)=> {
                 if(queryResult.rowCount == 0) {
                     res.send([])
@@ -302,9 +308,14 @@ function startServer() {
                     postgresClient.query(`SELECT * FROM "orderItem" WHERE "userId" = $1 AND "orderId" = $2`,[userId,orderId]).then(
                         (itemQueryResult)=> {
                             var orderObject = function(id,name,status,totalPrice,items) {
-                                return {id:orderId,name:name,status:status,totalPrice:totalPrice,items:items}
+                                return {
+                                    id:orderId,
+                                    name:name,
+                                    status:status,
+                                    totalPrice:totalPrice,
+                                    items:items}
                             }
-                            if(queryResult.rowCount == 0) {
+                            if(itemQueryResult.rowCount == 0) {
                                 res.send(orderObject(queryResult.rows[0].id,
                                     queryResult.rows[0].orderName,
                                     queryResult.rows[0].status,
