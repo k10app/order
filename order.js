@@ -7,15 +7,10 @@ class Order {
         this.timeStamp = timeStamp;
         this.catalogUpdateStock = catalogUpdateStockFunc
         
-        this.funcNames = ["create","list","pay"]
-        
-
-        //https://stackoverflow.com/questions/47290709/getting-an-undefined-this-when-using-classes-async-await
+        this.funcNames = ["create","pay","list","listDetails","delete"]
         this.funcNames.forEach(funcName => {
             this[funcName] = this[funcName].bind(this)
         });
-        //this.create = this.create.bind(this)
-        //this.create = this.create.bind(this)
     }
 
     async create(req, res) {
@@ -151,6 +146,96 @@ class Order {
 
         postgresClient.release()    
 
+    }
+
+    async listDetails (req, res) {
+        this.audit(req)
+
+        postgresClient = await this.postgresPool.connect()
+
+        let orderId = req.params.orderId
+        let userId = req.auth.login
+
+        postgresClient.query(`SELECT "id","orderName","status","totalPrice" FROM "order" WHERE "userId" = $1 AND "id" = $2`,[userId,orderId]).then(
+            (queryResult) => {
+                if(queryResult.rowCount == 0) {
+                    res.send({})
+                } else {
+                    postgresClient.query(`SELECT * FROM "orderItem" WHERE "userId" = $1 AND "orderId" = $2`,[userId,orderId]).then(
+                        (itemQueryResult)=> {
+                            var orderObject = function(id,name,status,totalPrice,items) {
+                                return {
+                                    id:orderId,
+                                    name:name,
+                                    status:status,
+                                    totalPrice:totalPrice,
+                                    items:items}
+                            }
+                            if(itemQueryResult.rowCount == 0) {
+                                res.send(orderObject(queryResult.rows[0].id,
+                                    queryResult.rows[0].orderName,
+                                    queryResult.rows[0].status,
+                                    queryResult.rows[0].totalPrice,
+                                    []))
+                            } else {
+                                res.send(orderObject(queryResult.rows[0].id,
+                                    queryResult.rows[0].orderName,
+                                    queryResult.rows[0].status,
+                                    queryResult.rows[0].totalPrice,
+                                    itemQueryResult.rows))
+                            }
+                        },
+                        (err) => {
+                            console.log(err)
+                            res.status(403).send("internal error")
+                        }
+                    )
+                }
+            },
+            (err) => {
+                console.log(err)
+                res.status(403).send("internal error")
+            }
+        )
+        postgresClient.release()
+    }
+    async delete (req, res) {
+            this.audit(req)
+    
+            postgresClient = await this.postgresPool.connect()
+    
+            var selectValue = req.params.select
+            
+            try {
+                await postgresClient.query('BEGIN')
+                
+                switch(selectValue) {
+                    case "all": 
+                        await postgresClient.query(`DELETE FROM "orderItem" WHERE "userId" = $1`,[req.auth.login])
+                        await postgresClient.query(`DELETE FROM "order" WHERE "userId" = $1`,[req.auth.login])
+                        break;
+                    default: 
+                        await postgresClient.query(`DELETE FROM "orderItem" WHERE "userId" = $1 AND "orderId" = $2`,[req.auth.login,selectValue])
+                        await postgresClient.query(`DELETE FROM "order" WHERE "userId" = $1 AND id = $2`,[req.auth.login,selectValue])
+                }
+                postgresClient.query('COMMIT').then(
+                    (dbResult) => {
+                        res.send({"status":"ok"})
+                    },
+                    (err) => {
+                        console.log("delete error "+err)
+                        res.status(403).send("internal error")
+                    } 
+                )
+            } catch (err) {
+                await postgresClient.query('ROLLBACK')
+                res.status(500).send("internal error on delete")
+                console.log("Could not process delete order transaction ",err)
+            } finally {
+                postgresClient.release()   
+            }
+            
+        
     }
 }
 

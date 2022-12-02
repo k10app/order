@@ -8,9 +8,10 @@ class Basket {
         
 
         //https://stackoverflow.com/questions/47290709/getting-an-undefined-this-when-using-classes-async-await
-        this.list = this.list.bind(this)
-        this.add = this.add.bind(this)
-        this.delete = this.delete.bind(this)
+        this.funcNames = ["add","list","delete"]
+        this.funcNames.forEach(funcName => {
+            this[funcName] = this[funcName].bind(this)
+        });
     }
     
     async list(req, res)  {
