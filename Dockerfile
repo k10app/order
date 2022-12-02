@@ -1,7 +1,7 @@
 FROM node:current-alpine
 RUN mkdir /order
 WORKDIR /order
-COPY ["server.js","package.json","/order/"]
+COPY ["server.js","basket.js","order.js","package.json","/order/"]
 RUN npm install
 VOLUME /order/certificates
 ENV PUBLIC_KEY /order/certificates/public.pub
