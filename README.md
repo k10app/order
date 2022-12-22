@@ -11,7 +11,7 @@ docker run -e POSTGRES_HOST=$postgresserver -e CATALOG_SERVER=$catalogserver -e 
 
 # building
 ```
-docker build -t ghcr.io/k10app/order .
+docker build -t ghcr.io/k10app/order:next .
 ```
 
 # postgres db ref

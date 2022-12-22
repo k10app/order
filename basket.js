@@ -38,33 +38,56 @@ class Basket {
     async add(req, res) {
         this.audit(req)
 
-        if (req.body.quantity < 1) {
-            res.status(403).send("quantity should be greater or equal to 1 got "+req.body.quantity)
+        let quantity = parseInt(req.body.quantity || 0)
+        if (quantity < 1) {
+            res.status(403).send("quantity should be greater or equal to 1 got "+quantity)
         } else {
             postgresClient = await this.postgresPool.connect()
             let catalogId = ""+req.body.catalogId
-           
-            this.catalogGetItem(catalogId).then(
-                (RESTResult) => {
+            let login = req.auth.login
+            
+
+            postgresClient.query(`SELECT "quantity" FROM basket WHERE  "userId" = $1 AND "catalogId" = $2`,[login,catalogId]).then(
+                (queryResult)=> {
+                    if(queryResult.rowCount == 0) {
+                        this.catalogGetItem(catalogId).then(
+                            (RESTResult) => {
+                                let params = [login,catalogId,quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
+                                
+                                postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
+                                    (queryResult)=> {
+                                        res.send({"status":"success"})
+                                    },
+                                    (err) => {
+                                        console.log(err)
+                                        res.status(500).send("internal error")
+                                    }
+                                )
+                            },
+                            (err) => {
+                                console.log("catalog query error "+err)
+                                res.status(500).send("invalid catalog id "+catalogId)
+                            }
+                        )
+                    } else {
+                        postgresClient.query(`UPDATE basket SET "quantity" = $3 WHERE  "userId" = $1 AND "catalogId" = $2 `,[login,catalogId,(quantity+parseInt(queryResult.rows[0].quantity))]).then(
+                            (queryResult)=> {
+                                res.send({"status":"success"})
+                            },
+                            (err) => {
+                                console.log(err)
+                                res.status(500).send("internal error")
+                            }
+                        )
+                    }
                     
-    
-                    let params = [req.auth.login,catalogId,req.body.quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
-                    
-                    postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
-                        (queryResult)=> {
-                            res.send({"status":"success"})
-                        },
-                        (err) => {
-                            console.log(err)
-                            res.status(403).send("internal error")
-                        }
-                    )
                 },
                 (err) => {
-                    console.log("catalog query error "+err)
-                    res.status(403).send("invalid catalog id "+catalogId)
+                    console.log(err)
+                    res.status(500).send("internal error")
                 }
             )
+
             postgresClient.release()  
         }
 
