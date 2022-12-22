@@ -38,31 +38,36 @@ class Basket {
     async add(req, res) {
         this.audit(req)
 
-        postgresClient = await this.postgresPool.connect()
-        let catalogId = ""+req.body.catalogId
-       
-        this.catalogGetItem(catalogId).then(
-            (RESTResult) => {
-                
+        if (req.body.quantity < 1) {
+            res.status(403).send("quantity should be greater or equal to 1 got "+req.body.quantity)
+        } else {
+            postgresClient = await this.postgresPool.connect()
+            let catalogId = ""+req.body.catalogId
+           
+            this.catalogGetItem(catalogId).then(
+                (RESTResult) => {
+                    
+    
+                    let params = [req.auth.login,catalogId,req.body.quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
+                    
+                    postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
+                        (queryResult)=> {
+                            res.send({"status":"success"})
+                        },
+                        (err) => {
+                            console.log(err)
+                            res.status(403).send("internal error")
+                        }
+                    )
+                },
+                (err) => {
+                    console.log("catalog query error "+err)
+                    res.status(403).send("invalid catalog id "+catalogId)
+                }
+            )
+            postgresClient.release()  
+        }
 
-                let params = [req.auth.login,catalogId,req.body.quantity,RESTResult.name,RESTResult.imgurl,RESTResult.price]
-                
-                postgresClient.query(`INSERT INTO basket ("userId","catalogId","quantity","name","imgurl","price") VALUES ($1,$2,$3,$4,$5,$6)`,params).then(
-                    (queryResult)=> {
-                        res.send({"status":"success"})
-                    },
-                    (err) => {
-                        console.log(err)
-                        res.status(403).send("internal error")
-                    }
-                )
-            },
-            (err) => {
-                console.log("catalog query error "+err)
-                res.status(403).send("invalid catalog id "+catalogId)
-            }
-        )
-        postgresClient.release()  
     }
     async delete(req, res) {
         this.audit(req)
